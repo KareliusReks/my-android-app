@@ -2,6 +2,7 @@ package com.kareliusreks.xdl
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.app.DownloadManager
 import android.content.ClipboardManager
 import android.content.Context
@@ -215,11 +216,67 @@ class MainActivity : Activity() {
                     setOnClickListener {
                         val suffix = if (res.videos.size > 1) "_${index + 1}" else ""
                         val q = if (v.height > 0) "_${v.height}p" else ""
-                        download(v, "x_${res.tweetId}$suffix$q.mp4")
+                        askNameAndDownload(v, "x_${res.tweetId}$suffix$q")
                     }
                 }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
             }
         }
+    }
+
+    // ---------- Имя файла ----------
+
+    /** Окно выбора имени: своё название или стандартное */
+    private fun askNameAndDownload(v: VideoVariant, defaultName: String) {
+        val field = EditText(this).apply {
+            hint = defaultName
+            setSingleLine(true)
+            setText("")
+        }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+            addView(TextView(this@MainActivity).apply {
+                text = "Оставьте поле пустым, чтобы сохранить как:\n$defaultName.mp4"
+                textSize = 13f
+                setTextColor(Color.DKGRAY)
+                setPadding(0, 0, 0, dp(8))
+            })
+            addView(field)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Название видео")
+            .setView(box)
+            .setPositiveButton("Скачать") { _, _ ->
+                val custom = sanitize(field.text.toString())
+                download(v, uniqueName(if (custom.isEmpty()) defaultName else custom))
+            }
+            .setNeutralButton("По умолчанию") { _, _ ->
+                download(v, uniqueName(defaultName))
+            }
+            .setNegativeButton("Отмена", null)
+            .show()
+        field.requestFocus()
+    }
+
+    /** Убирает символы, запрещённые в именах файлов, и расширение, если его ввели */
+    private fun sanitize(name: String): String =
+        name.trim()
+            .removeSuffix(".mp4").removeSuffix(".MP4")
+            .replace(Regex("""[\\/:*?"<>|\n\r\t]"""), "_")
+            .trim('.', ' ')
+            .take(120)
+
+    /** Если файл с таким именем уже есть — добавляет (2), (3)… */
+    private fun uniqueName(base: String): String {
+        @Suppress("DEPRECATION")
+        val dir = java.io.File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "X")
+        var name = "$base.mp4"
+        var n = 2
+        while (java.io.File(dir, name).exists() && n < 1000) {
+            name = "$base ($n).mp4"
+            n++
+        }
+        return name
     }
 
     // ---------- Скачивание ----------
